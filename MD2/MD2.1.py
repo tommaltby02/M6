@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 
-#Programme to process XYZ file containing 50 different configurations and calculate the RDF for each one
+#Programme to process XYZ file containing different configurations and calculate the average RDF
+
+###2.1 and 2.3###
 
 #Configuration class to represent each configuration
 class configuration:
@@ -10,8 +11,10 @@ class configuration:
         self.timestep = None
         self.no_particles = None
         self.coords = None
+        self.V = None
+        self.a = None
 
-#Create confiiguration class for every confirguration storing timestep and x, y, z coords of every particle
+#Create configuration class for every confirguration storing timestep and x, y, z coords of every particle
 def InitConfigs(xyz_file, no_configurations):
     file = open(xyz_file, 'r')
     lines =[]
@@ -20,64 +23,76 @@ def InitConfigs(xyz_file, no_configurations):
     file.close()
     
     configurations = []
-
     for i in range(no_configurations):
         config = configuration()
-        config.timestep = int(lines[i * 2009 + 1])
-        config.no_particles = int(lines[i * 2009 + 3])
+        config.no_particles = int(lines[3])
+        config.timestep = int(lines[i * (config.no_particles + 9) + 1])
+        
+        #Get volume and length of box
+        a = np.zeros((3))
+        for axis in range(3):
+            bound = lines[5 + axis + (config.no_particles + 9) * i].split()
+            a[axis] = float(bound[1]) - float(bound[0])
+        vol  = np.prod(a)
+        config.V = vol
+        config.a = a
+        
+        #Get coordinates of every particle and store in (N, 3) matrix
         config.coords = np.zeros((config.no_particles, 3))
         for j in range(config.no_particles):
-            xyzline = lines[i * 2009 + 9 + j].split()
-            xyz = np.array([xyzline[4], xyzline[5], xyzline[6]])
-            config.coords[j] = xyz
+            config.coords[j] = lines[i * (config.no_particles + 9) + 9 + j].split()[4:7]
+        config.coords *= a #Scale coords from box length units to Angstrom
+        
+        #Add config to list
         configurations.append(config)
     
+    return configurations
 
-    #Get volume of box, here coordinates are scaled so the box volume is 1
-    V = 1
-     
-
-    return configurations, V
 
 #Calculate RDF for a configuration
-def CalcRDF(config, r, dr, V):
-    n_sum = 0
-    for i in range(config.no_particles):
-        n_in_shell = GetAtoms(r, dr, config, i)
-        n_sum  += n_in_shell
+def RDF(config, r_edges, r_centres, dr):
+    #Generate (N,N) matrix containing the norm of all inter particle distances, also apply periodic boundary conditions
+    rij = np.linalg.norm(PBConditions(config.coords[:, np.newaxis, :] - config.coords, config.a), axis = 2) 
+    #To prevent self counting fill diagonal with nan
+    np.fill_diagonal(rij, np.nan)
+    #For each bin in r_edges count number of rij values that lie within the boundary
+    n = np.histogram(rij, bins = r_edges)[0]
+    return n  * config.V / (4 * np.pi * (r_centres + 0.5 * dr) ** 2 * dr * config.no_particles**2) #Return the RDF function calculated for every r_center
 
-    return V/(4* np.pi * r**2 * dr * config.no_particles**2) * n_sum
-
-    
-#Get number of atoms in shell defined by r and dr
-def GetAtoms(r, dr, config, centre_particle):
-    rijvec  = np.linalg.norm(config.coords - config.coords[centre_particle], axis = 1) 
-    df = pd.DataFrame({'r': rijvec})
-    n = sum((df.r < r) & (df.r >= r - dr))
-    return n
+#Use modulo to get smallest distance between any two particles
+def PBConditions(mat, box_length):
+    return mat % (box_length/2)
 
 
 #Function to calculate RDF for every configuration from the XYZ file and average them 
-def GetAverageRDF(filename, maxr, dr, rstep, no_configurations, desired_config):
-    configs, V = InitConfigs(filename, no_configurations)
+def GetAverageRDF(filename, maxr, dr, no_configurations):
+    #Initialise all configurations with relevant parameters
+    configs = InitConfigs(filename, no_configurations)
 
+    #Generate bins based on dr
+    r_edges = np.arange(0, maxr, dr)
+    #Get centre of each r bin
+    r_centres =  0.5 * (r_edges[:-1] + r_edges[1:])
+    #Empty g matrix for averaging over configurations
+    g_mat = np.zeros((no_configurations, len(r_edges) - 1))
+
+    for config in range(len(configs)):
+        g_mat[config] = RDF(configs[config], r_edges, r_centres, dr)
+        print('Config ' + str(config+1) + ' of '+ str(no_configurations) + ' Complete' )
+
+    #Get average RDF over all configurations
+    g_average = np.sum(g_mat, axis = 0) / no_configurations
     
-    GetRDF(configs[desired_config], 0.005, maxr, dr, rstep, V)
+    plt.plot(r_centres, g_average)
+    plt.xlabel('r / Angstrom')
+    plt.ylabel('Average g(r)')
+    plt.title(filename[:-4] + ' RDF')
+    plt.show()
+
     
     return
 
-def GetRDF(config, minr, maxr, dr, rstep, V):
-    glist = []
-    rlist = np.arange(minr, maxr, rstep)
-    num = 0
-    for r in rlist:
-        glist.append(CalcRDF(config, r, dr, V))
-        num += 1
-        print(str((num / len(rlist)) * 100) + "% Complete")
-    plt.plot(rlist, glist)
-    plt.show()
 
 
 
 
-GetAverageRDF('ideal.xyz', 0.5, 0.001, 0.01, 50, 15)
