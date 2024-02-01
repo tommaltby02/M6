@@ -4,9 +4,17 @@ import matplotlib.pyplot as plt
 #Programme to calculate energy of conf.xyz using different models
 
 #Constants
-kb = 1.38E-23
+kb = 1.38E-23 
 temp = 179.81
-mass = 6.63E-26
+mass = 1E-26
+sigma1 = 3.405
+sigma2 = 3.05
+er = 119.87
+lama = 49
+lamr = 50
+k = 5
+no_configs = 1
+
 
 #Configuration class to represent each configuration
 class configuration:
@@ -14,8 +22,11 @@ class configuration:
         self.timestep = None
         self.no_particles = None
         self.coords = None
-        self.particle_types = []
+        self.particle_types = None
         self.velocities = None
+        self.V = None
+        self.a = None
+        self.type_mat = None
 
 #Create confiiguration class for every confirguration storing timestep and x, y, z coords of every particle
 def InitConfigs(xyz_file, no_configurations):
@@ -25,48 +36,59 @@ def InitConfigs(xyz_file, no_configurations):
         lines.append(line[:-1])
     file.close()
 
-    #Get volume of box
-    x = lines[5].split()
-    a = float(x[1]) - float(x[0])
-    V = a**3
-    
     configurations = []
 
     for i in range(no_configurations):
         config = configuration()
-        config.timestep = int(lines[i * 2009 + 1])
-        config.no_particles = int(lines[i * 2009 + 3])
+        config.no_particles = int(lines[3])
+        config.timestep = int(lines[i * (config.no_particles + 9) + 1])
         config.coords = np.zeros((config.no_particles, 3))
+        config.particle_types = np.zeros((config.no_particles))
+
+        #Get volume of box
+        a = np.zeros((3))
+        for axis in range(3):
+            x = lines[5 + (config.no_particles + 9) * i + axis].split()
+            a[axis] = float(x[1]) - float(x[0])
+        V = np.prod(a)
+
+        config.V = V
+        config.a = a
+
+
         for j in range(config.no_particles):
-            xyzline = lines[i * 2009 + 9 + j].split()
-            xyz = np.array([xyzline[4], xyzline[5], xyzline[6]])
-            config.coords[j] = xyz
-            config.particle_types.append(xyzline[2])
+            config.coords[j] = lines[i * (config.no_particles + 9) + 9 + j].split()[4:7]
+            config.particle_types[j] = lines[i * (config.no_particles + 9) + 9 + j].split()[2]
         
         #Scale coordinates into Angstrom
         config.coords *= a
         
         #Generate velocities
         config = GenerateVelocities(config)
+        #Get type matrix
+        config = GetTypeMatrix(config)
 
         #Get histogram
-        GenerateVelHistogram(config)
+        #GenerateVelHistogram(config)
 
 
         configurations.append(config)
 
-    
-
-    return configurations, V
+    return configurations
 
 #Use normal distribution with STD derived from Maxwell-Boltzmann distribution
 def GenerateVelocities(config):
-
     std = np.sqrt(kb * temp / mass)
-
     config.velocities = np.random.normal(0, std, size = (config.no_particles, 3))
-
     return config
+
+#Generate matrix of overlaps of particle types, entry will be 1 for particles of the same type and -1 for particles of differing types, element multiplying this 
+#by the matrix generated according to the YDH potential will give the energy for each particle pair
+def GetTypeMatrix(config):
+    vec = np.reshape(np.where(config.particle_types == 2, -1, 1),(config.no_particles, 1))
+    config.type_mat = np.matmul(vec, vec.transpose())
+    return config
+
 
 #Generate histogram of velocities
 def GenerateVelHistogram(config):
@@ -77,93 +99,47 @@ def GenerateVelHistogram(config):
         plt.legend()
         plt.show()
 
-
+#Fill diagonals to prevent dividing by 0 errors also divide by 2 to prevent double counting of particle pairs
 def Potential(config, type):
-    Utot = 0
-    for i in range(config.no_particles - 1):
-        for j in range(i + 1, config.no_particles):
-            r = np.linalg.norm(config.coords[i] - config.coords[j])
-            if type == 'LJ':
-                Utot += GetLJPairEnergy(r)
-            elif type == 'PHS':
-                Utot += GetPHSPairEnergy(r)
-            elif type == 'HSYDH':
-                Utot += GetHSPairEnergy(r) + GetYDHPairEnergy(r, config.particle_types[i], config.particle_types[j])
-
-    return Utot
-
-#Calculate pair potential using Lennard-Jones model
-def GetLJPairEnergy(r):
-    #Constants
-    sigma = 3.405 
-    e = 119.87
-    if r < 3 * sigma:
-        return 4 * e * kb * ((sigma/r)**12 - (sigma/r)**6)
-    else:
-        return 0
-    
-#Calculate pair potential using Pseudo Hard Sphere model
-def GetPHSPairEnergy(r):
-    #Constants
-    sigma = 3.405
-    lamr = 50
-    lama = 49
-    er = 119.87
-    if r < (lamr/lama) * sigma:
-        return lamr * (lamr / lama) ** lama * er * kb * ((sigma/r)**lamr - (sigma/r)**lama) + er * kb
-    else:
-        return 0
-    
-#Calculate pair potential using Hard Sphere model
-def GetHSPairEnergy(r):
-    #Constants
-    sigma = 3.05
-    
-    if r < sigma:
-        return float('inf')
-    else:
-        return 0
-
-#Calculate pair potential using Yukawa Debye Huckel model
-def GetYDHPairEnergy(r, type_a, type_b):
-    #Constants
-    sigma = 3.05
-    e = 119.87
-    k = 5
-
-    if r < 3.5 * sigma:
-        return  GetSign(type_a, type_b) * e * kb * sigma / r * np.exp(-k * (r - sigma))
-    else:
-        return 0
-
-    
-
-def GetSign(type_a, type_b):
-    if type_a == type_b:
-        return 1
-    else:
-        return -1
-
+    r = np.linalg.norm(config.coords[:, np.newaxis, :] - config.coords, axis = 2)
+    if type == 'LJ':
+        np.fill_diagonal(r, 3 * sigma1)
+        pot = GetLJEnergy(r) / 2
+    elif type == 'PHS':
+        np.fill_diagonal(r, 1.5 * sigma1)
+        pot = GetPHSEnergy(r) / 2
+    elif type == 'HSYDH':
+        np.fill_diagonal(r, 3.5 * sigma2)
+        pot =  GetHSEnergy(r) + GetYDHEnergy(r, config) / 2
+    return pot
 
 def Kinetic(config):
-    ke = 0
-    for i in range(config.no_particles):
-        speed = np.linalg.norm(config.velocities[i])
-        ke += GetKE(speed)
-    return ke 
+    v = np.linalg.norm(config.velocities, axis = 1)
+    return 0.5 * mass * np.sum(v**2) 
 
+#Calculate pair potential using Lennard-Jones model
+def GetLJEnergy(r):
+    return np.sum(np.where(r < 3 * sigma1, 4 * er * kb * ((sigma1/r)**12 - (sigma1/r)**6), 0))
 
-def GetKE(speed):
-    return 0.5 * mass * speed **2
+#Calculate pair potential using Pseudo Hard Sphere model
+def GetPHSEnergy(r):
+    return np.sum(np.where(r < 1.5 * sigma1, lamr * (lamr / lama) ** lama * er * kb * ((sigma1/r)**lamr - (sigma1/r)**lama) + er * kb, 0))
+   
+#Calculate pair potential using Hard Sphere model
+def GetHSEnergy(r):
+    return np.sum(np.where(r < sigma2, float('inf'), 0))
 
+#Calculate pair potential using Yukawa Debye Huckel model
+def GetYDHEnergy(r, config):
+    return np.sum(config.type_mat * np.where(r < 3.5 * sigma2, er * kb * sigma2 / r * np.exp(-k * (r - sigma2)), 0))
+    
 def CheckTemp(ke, config):
     avgke = ke / config.no_particles
     return 2/3 * avgke/kb
 
 
 def GetEnergy(xyzfile, no_configurations, type):
-    configs, V = InitConfigs(xyzfile, no_configurations)
-
+    configs = InitConfigs(xyzfile, no_configurations)
     for config in configs:
         pot = Potential(config, type)
         ke = Kinetic(config)
@@ -174,7 +150,6 @@ def GetEnergy(xyzfile, no_configurations, type):
     print('KE: ' + str(ke) + 'J')
     print('E: ' + str(energy) + 'J')
     print('T: ' + str(temp) + 'K')
-
     return
 
-GetEnergy('conf.xyz', 1, 'HSYDH')
+GetEnergy('conf.xyz', no_configs, 'HSYDH')

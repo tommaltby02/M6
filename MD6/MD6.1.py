@@ -1,11 +1,16 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
+###6.1###
+#Program calculates all contacts for all temps in ~2mins
 
 #Constants
 no_configurations = 40
 no_pols = 90
 rc = 4.1
+no_atoms = 3600
+temp_list = [264, 276, 288, 300]
 
-###6.1###
 
 #Configuration class to contin configuration info
 class config:
@@ -14,13 +19,10 @@ class config:
         self.polymers = []
         self.timestep = None
         self.no_atoms = None
-
-#Configuration class to contain polymer info
-class polymer:
-    def __init__(self):
-        self.no_segments = None
+        self.V = None
+        self.a = None
         self.coords = None
-        self.no = None
+        self.overlap_mat = None
 
 #Initiate configurations, each configuration contains a list of all polymers in the system, the polymer objects contain the coordinates of the respective polymer segments
 def InitConfigs(xyzfile, no_configs, no_polymers):
@@ -32,101 +34,90 @@ def InitConfigs(xyzfile, no_configs, no_polymers):
         lines.append(line[:-1])
     file.close()
 
-    #Get box size
-    a, V = GetBoxVolume(lines)
-
-    #Initiate polymers for all configs
+    #Initiate all configs
     confs = []
+
+    #Get overlap matrix
+    overlap_mat = GetOverlapMatrix(no_atoms, no_pols)
 
     #For every frame in the xyz file
     for i in range(no_configs):
         conf = config()
         conf.no_polymers = no_polymers
-        conf.no_atoms = int(lines[3])
+        conf.no_atoms = no_atoms
 
-        #For every polymer in the frame
-        for j in range(no_polymers):
-            pol = polymer()
-            pol.no_segments = int(conf.no_atoms / no_polymers)
-            pol.no = int(lines[9 + (conf.no_atoms + 9) * i + j * pol.no_segments].split()[1])
-            pol.coords = np.zeros((pol.no_segments, 3))
+        #Get box volume
+        a = np.zeros((3))
+        for axis in range(3):
+            x = lines[5 + (conf.no_atoms + 9) * i + axis].split()
+            a[axis] = float(x[1]) - float(x[0])
+        vol = np.prod(a)
 
-            #For every segment of the polymer
-            for k in range(pol.no_segments):
-                coordline = lines[9 + (conf.no_atoms + 9) * i + j * pol.no_segments + k ].split()
-                pol.coords[k] = np.array([coordline[3], coordline[4], coordline[5]])
-            
-            
-            #Scale polymer coordinates into Angstrom
-            for axis in range(3):
-                pol.coords[:,axis] *= a[axis]
-            
-            #Add polymer to current config
-            conf.polymers.append(pol)
+        conf.a = a
+        conf.V = vol
+
+        conf.coords = np.zeros((conf.no_atoms, 3))
+        for j in range(conf.no_atoms):
+            conf.coords[j] = lines[i * (conf.no_atoms + 9) + 9 + j].split()[3:6]
         
+        conf.coords *= a
+        conf.overlap_mat = overlap_mat
+
         #Add config to list of configs
         confs.append(conf)
     
-    return confs, a, V
+    return confs
 
-#Function to get box volume as system is not a cube
-def GetBoxVolume(lines):
-    xyz = np.zeros((3,2))
-    for i in range(3):
-        xyz[i] = np.array(lines[5 + i].split())  
-    print(xyz)
-    a = xyz[:,1] - xyz[:,0]
-    V = np.product(a)
-    return a, V
+#Generate overlap matrix to account for directly joined beads in each polymer, this matrix multiplied element wise by the rij matrix containg the 
+#distances between every bead will account for removing the close contacts
+def GetOverlapMatrix(no_atoms, no_pols):
+    overlap_mat = np.ones((no_atoms, no_atoms))
+    no_beads = int(no_atoms / no_pols)
+    mat = np.ones((no_beads, no_beads))
+    
+    #Generate mini matrix which has 1s everywhere but i = j + 1, i = j - 1, these elements have 0
+    for bead1 in range(no_beads - 1):
+        for bead2 in range(bead1, no_beads):
+            if bead2 == bead1 + 1 or bead2 == bead1 - 1:
+                mat[bead1][bead2] = 0
+                mat[bead2][bead1] = 0
+    #Modify overlap_matrix to have the mini matrix where polymer[i] = polymer[i]
+    for i in range(no_pols):
+        overlap_mat[i * no_beads : no_beads + i * no_beads , i * no_beads : no_beads + i * no_beads] = mat
+    return overlap_mat
 
-#Functions to get intermolecular contacts, for every pair of polymers every unique pair of segments are compared, if pair are within rc contact is counted
-def GetInterContacts(polymers):
-    n = 0
-    for polymerA in range(len(polymers) - 1):
-        for polymerB in range(polymerA + 1, len(polymers)):
-            n += Get2PolymerContacts(polymers[polymerA], polymers[polymerB])
-    return n
-
-def Get2PolymerContacts(polymerA, polymerB):
-    n = 0
-    for segmentA in range(polymerA.no_segments):
-        for segmentB in range(polymerB.no_segments):
-            r = np.linalg.norm(polymerA.coords[segmentA] - polymerB.coords[segmentB])
-            if r < rc:
-                n += 1
-    return n
-
-
-#Function to get intramolecular contacts, for every polymer every unique pair of segments within the same polymer are compared, if pair are within rc and not adjacent contact is counted
-def GetIntraContacts(polymers):
-    n = 0
-    for polymer in polymers:
-        for segmentA in range(polymer.no_segments - 1):
-           for segmentB in range(segmentA + 1, polymer.no_segments):
-            r = np.linalg.norm(polymer.coords[segmentA] - polymer.coords[segmentB])
-            if segmentB != segmentA + 1 and segmentB != segmentA - 1 and r < rc:
-                n += 1
-    return n
-
-def GetConfigContacts(conf):
-    ninter = GetInterContacts(conf.polymers)
-    nintra = GetIntraContacts(conf.polymers)
-    n = nintra + ninter
-    return n 
+#Get all contacts at once
+def GetContacts(conf):
+    rij = np.linalg.norm(conf.coords[:, np.newaxis, :] - conf.coords, axis = 2) 
+    rij_overlap = rij * conf.overlap_mat #Disregards all nearest neighbour distances
+    return int(np.sum(np.where((rij_overlap > 0) & (rij_overlap < rc), 1, 0)) / 2) #Divide by 2 to account for double counting of interactions
 
 #Function to average contacts over all polymers in all configs
 def AverageOverConfigs(filename, no_confs, no_polymers):
-    confs, a, V = InitConfigs(filename, no_confs, no_polymers)
+    confs = InitConfigs(filename, no_confs, no_polymers)
     msum = 0
-
-    for conf in confs:
-        msum += GetConfigContacts(conf) / conf.no_polymers
+    for i in range(len(confs)):
+        n = GetContacts(confs[i])
+        print("Contacts for conformer " + str(i+1) + " = " + str(n))
+        msum += n / confs[i].no_polymers
     
-    return msum / no_confs
+    average_contacts = msum / no_confs
+    print("Average contacts at " + filename[:-4] + " = " + str(average_contacts))
+    return average_contacts
         
+def GetContactsvsTemp(temps, no_confs, no_polymers):
+    average_n = []
+    for temp in temps:
+        average_n.append(AverageOverConfigs(str(temp) + "K.xyz", no_confs, no_polymers))
+    
+    plt.plot(temps, average_n)
+    plt.xlabel("T / K")
+    plt.ylabel("Average contacts per polymer")
+    plt.show()
 
 
 
-AverageOverConfigs('264K.xyz', no_configurations, no_pols)
-        
+GetContactsvsTemp(temp_list, no_configurations, no_pols)
+
+
 
