@@ -57,25 +57,25 @@ def InitConfigs(xyzfile, no_configurations):
 
 
 def GetConfigDensity(config, z_edges, vol):
-    z = config.coords[:,2] 
+    z = config.coords[:,2]
     return np.histogram(z, bins = z_edges)[0] / vol
 
 def GetDensityProfile(xyzfile, no_confs, no_bins):
     confs = InitConfigs(xyzfile, no_confs)
 
     #Get relevant z parameters
-    z = confs[0].a
+    z = confs[0].a 
     dz = z[2] / no_bins
-    vol = dz * z[0] * z[1]
+    vol = dz * z[0] * z[1] / sigma **3 #In reduced units
     z_edges = np.arange(0, z[2], dz)
-    z_centres = 0.5 * (z_edges[:-1] + z_edges[1:])
+    z_centres = 0.5 * (z_edges[:-1] + z_edges[1:]) / sigma #In reduced units
 
     average_density = np.zeros((no_bins - 1))
 
     for conf in confs:
         average_density += GetConfigDensity(conf, z_edges, vol)
     
-    average_density /= no_confs
+    average_density /= no_confs 
 
     PlotDensity(average_density, z_centres, xyzfile)
 
@@ -84,11 +84,11 @@ def GetDensityProfile(xyzfile, no_confs, no_bins):
     
 def PlotDensity(num_density, bin_list, name):
     plt.plot(bin_list, num_density)
-    plt.title(name[:-4])
-    plt.xlabel('z')
-    plt.ylabel('Number Density')
+    plt.title(name[10:-4])
+    plt.xlabel('z / σ')
+    plt.ylabel('Number Density / beads per $σ^3$')
     plt.show()
 
 
 
-GetDensityProfile('300K.xyz', no_confs, 60)
+GetDensityProfile('XYZ Files/300K.xyz', no_confs, 80)

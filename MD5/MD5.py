@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 m = 6.63E-26 #kg
 e = 6.047E-20 #J
 sigma = 3.405 #Angstrom
-tau = np.sqrt(m * sigma / e) #s
+tau = np.sqrt(m * (sigma * 1E-10)**2  / e) #s
 no_configs = 50
 
 
@@ -56,7 +56,7 @@ def InitConfigs(xyz_file, no_configurations):
         configurations.append(config)
     return FixMatrices(configurations)
 
-
+#Get COM drift between the frames
 def GetCOM(config1, config2):
     com = np.mean(config2.coords, axis = 0) - np.mean(config1.coords, axis = 0)
     return com
@@ -78,23 +78,24 @@ def FixMatrices(configs):
     return configs
 
 
-def MSD(filename, no_configurations):
+def MSD(filename, no_configurations, frame_skip):
     configs = InitConfigs(filename, no_configurations)
 
     msd = []
     t = []
 
+    n = 0
     for i in range(1, len(configs)):
-        msd.append(GetMSD(configs[0], configs[i]))
-        t.append(configs[i].timestep * 10E-15 / tau) #In units of tau
-
-    coef = np.polyfit(t, msd, 1)
-    poly1d_fn = np.poly1d(coef) 
-    plt.plot(t, msd, 'yo', t, poly1d_fn(t), '--k')
-    plt.xlabel("t")
-    plt.ylabel("MSD")
+        if n % frame_skip == 0:
+            msd.append(GetMSD(configs[0], configs[i]))
+            t.append(configs[i].timestep * 10E-15 / tau) #In units of tau
+        n += 1
+    plt.plot(t, msd)
+    plt.xlabel("t / tau")
+    plt.ylabel("MSD / $σ^2$")
+    plt.title(filename[10:-4])
     plt.show()
 
 
 
-MSD('diffusionB.xyz', 50)
+MSD('XYZ Files/diffusionB.xyz', no_configs, 1)

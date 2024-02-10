@@ -16,7 +16,6 @@ temp_list = [264, 276, 288, 300]
 class config:
     def __init__(self):
         self.no_polymers = None
-        self.polymers = []
         self.timestep = None
         self.no_atoms = None
         self.V = None
@@ -24,7 +23,7 @@ class config:
         self.coords = None
         self.overlap_mat = None
 
-#Initiate configurations, each configuration contains a list of all polymers in the system, the polymer objects contain the coordinates of the respective polymer segments
+#Initiate configurations
 def InitConfigs(xyzfile, no_configs, no_polymers):
 
     #Get file data
@@ -94,7 +93,7 @@ def GetContacts(conf):
 
 #Function to average contacts over all polymers in all configs
 def AverageOverConfigs(filename, no_confs, no_polymers):
-    confs = InitConfigs(filename, no_confs, no_polymers)
+    confs = InitConfigs("XYZ Files/" + filename, no_confs, no_polymers)
     msum = 0
     for i in range(len(confs)):
         n = GetContacts(confs[i])

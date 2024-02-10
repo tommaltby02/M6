@@ -1,0 +1,5 @@
+In coexistence box (288K):
+Liquid density = 0.407447805 beads per sigma^3
+Vapour density = 0.034744414 beads per sigma^3
+
+The critical point is at approximately T = 295K and density = 0.218 beads per sigma^3

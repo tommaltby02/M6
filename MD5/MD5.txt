@@ -1,0 +1,13 @@
+Diffusion Coefficients
+A:
+A is almsot a perfect straight line demonstrating simple diffusion with a diffusion
+coefficient of 0.00233 σ^2 tau^-1.
+
+B:
+B demonstrates subdiffusion, there is an initial simple diffusion followed by a plateau indicating the mean squared displacement is not directly proportional to time. Instead <r^2> ~ t^a where a < 1. The diffusion coefficient for the intial simple diffusion scheme is 4.6753E-06 σ^2 tau^-1.
+
+A has a much large diffusion coefficient than B and therefore diffuses much faster. A is a gas species and B is likely a solid due to the small diffusion coefficient and non linear diffusion.
+
+Diffusion coefficients were calculated using D = d<r^2>/dt * 1/2.
+
+To improve sampling one could sample every n frames to better visualise the diffusion curve.

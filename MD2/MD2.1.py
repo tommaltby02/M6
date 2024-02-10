@@ -51,8 +51,9 @@ def InitConfigs(xyz_file, no_configurations):
 
 #Calculate RDF for a configuration
 def RDF(config, r_edges, r_centres, dr):
+    rij = config.coords[:, np.newaxis, :] - config.coords
     #Generate (N,N) matrix containing the norm of all inter particle distances, also apply periodic boundary conditions
-    rij = np.linalg.norm(PBConditions(config.coords[:, np.newaxis, :] - config.coords, config.a), axis = 2) 
+    rij = np.linalg.norm(PBConditions(rij, config.a), axis = -1)
     #To prevent self counting fill diagonal with nan
     np.fill_diagonal(rij, np.nan)
     #For each bin in r_edges count number of rij values that lie within the boundary
@@ -61,7 +62,8 @@ def RDF(config, r_edges, r_centres, dr):
 
 #Use modulo to get smallest distance between any two particles
 def PBConditions(mat, box_length):
-    return mat % (box_length/2)
+    mat -= np.rint(mat / box_length) * box_length
+    return mat
 
 
 #Function to calculate RDF for every configuration from the XYZ file and average them 
@@ -91,6 +93,8 @@ def GetAverageRDF(filename, maxr, dr, no_configurations):
 
     
     return
+
+GetAverageRDF("XYZ Files/set2.xyz", 20, 0.5, 50)
 
 
 

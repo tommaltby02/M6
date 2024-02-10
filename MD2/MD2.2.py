@@ -77,14 +77,17 @@ def RDF(config, r_edges, r_centres, dr, type):
         rij = np.linalg.norm(PBConditions(config.coords_O[:, np.newaxis, :] - config.coords_O, config.a), axis = 2)
         np.fill_diagonal(rij, np.nan)
     elif type == 'OH':
-        n_atoms = config.no_H * config.no_O
-        rij = np.linalg.norm(PBConditions(config.coords_O[:, np.newaxis, :] - config.coords_H, config.a), axis = 2)
-    n = np.histogram(rij, bins = r_edges)[0]
+        n_atoms = 2 * config.no_H * config.no_O
+        rijO = np.linalg.norm(PBConditions(config.coords_O[:, np.newaxis, :] - config.coords_H, config.a), axis = 2)
+        rijH = np.linalg.norm(PBConditions(config.coords_H[:, np.newaxis, :] - config.coords_O, config.a), axis = 2)
+        rij = np.concatenate((rijO.flatten(), rijH.flatten()))
+    n = np.histogram(rij, bins = r_edges)[0] 
     g = n * config.V / (4 * np.pi * (r_centres + 0.5 * dr) ** 2 * dr * n_atoms)
     return g
 
 def PBConditions(mat, box_length):
-    return mat % (box_length / 2)
+    mat -= np.rint(mat / box_length) * box_length
+    return mat
 
 
 
@@ -107,3 +110,4 @@ def GetAverageRDF(filename, maxr, dr, no_configurations, type):
     plt.title(type + ' RDF')
     plt.show()
 
+GetAverageRDF("XYZ Files/water.xyz", 18, 0.2, 50, 'OH')
