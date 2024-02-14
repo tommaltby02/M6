@@ -9,7 +9,7 @@ def MetropolisAlgorithm(MCsteps, initial_nj, be, change_type):
         trialnj, a = GetTrialnj(rand_num, currentnj, change_type)
         if np.random.uniform(0,1) < np.exp(-a * be):
             currentnj = trialnj
-            sumnj += currentnj
+        sumnj += currentnj 
     return sumnj / MCsteps
 
 def Initialisenj(initial_nj):
