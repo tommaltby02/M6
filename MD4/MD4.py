@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 #Constants
 no_configs = 50
-m = 6.63E-27
+m = 6.63E-26
 e = 1.67E-21 #In J
 lama = 49
 lamr = 50
@@ -94,11 +94,11 @@ def GetEnthalpy(config, type):
 def GetForceEnergy(r, rij, type):
     if type == 'LJ':
         np.fill_diagonal(r, 3 * LJsigma) #To prevent dividing by 0 errors the r matrix is filled with the cutoff value along i=j
-        f = GetLJForce(r, LJsigma)[:, :, np.newaxis] * rij / r[:, :, np.newaxis]
+        f = GetLJForce(r, LJsigma)[:, :, np.newaxis] * rij / r[:, :, np.newaxis] * 1/1E-10
         energy = np.sum(GetLJEnergy(r, LJsigma)) /2
     elif type == 'PHS':
         np.fill_diagonal(r, 1.5 * PHSsigma)
-        f = GetPHSForce(r, PHSsigma)[:, :, np.newaxis] * rij / r[:, :, np.newaxis]
+        f = GetPHSForce(r, PHSsigma)[:, :, np.newaxis] * rij / r[:, :, np.newaxis] * 1/1E-10
         energy = np.sum(GetPHSEnergy(r, PHSsigma)) / 2
     return f, energy
 
@@ -185,6 +185,6 @@ def BlockAnalysis(filename, no_configs, potential, block_size):
 
 
 
-
+InstPressure("pres.xyz", no_configs, potentials)
 
 

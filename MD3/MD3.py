@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 #Constants
 kb = 1.38E-23 
 temp = 179.81
-mass = 1E-26
+mass = 6.63E-26
 sigma1 = 3.405
 sigma2 = 3.05
 er = 119.87
@@ -110,7 +110,7 @@ def Potential(config, type):
         pot = GetPHSEnergy(r) / 2
     elif type == 'HSYDH':
         np.fill_diagonal(r, 3.5 * sigma2)
-        pot =  GetHSEnergy(r) + GetYDHEnergy(r, config) / 2
+        pot =  (GetHSEnergy(r) + GetYDHEnergy(r, config)) / 2
     return pot
 
 def Kinetic(config):
@@ -152,4 +152,4 @@ def GetEnergy(xyzfile, no_configurations, type):
     print('T: ' + str(temp) + 'K')
     return
 
-GetEnergy('conf.xyz', no_configs, 'HSYDH')
+GetEnergy('conf.xyz', no_configs, 'PHS')
