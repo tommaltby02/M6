@@ -70,7 +70,7 @@ def RunAlgorithm(MCsteps, initial_nj, change_type, no_runs):
     
 
 
-RunAlgorithm(1000, "1", "1", 1)
+RunAlgorithm(10000, "rand", "rand5", 50)
 
 
     

@@ -98,4 +98,4 @@ def MSD(filename, no_configurations, frame_skip):
 
 
 
-MSD('XYZ Files/diffusionB.xyz', no_configs, 1)
+MSD('XYZ Files/diffusionA.xyz', no_configs, 1)

@@ -13,10 +13,9 @@ def TrapezoidalIntegration(no_samples, a, b):
         
 
 def MCIntegration(weighting_function, no_samples):
-        samples = np.random.uniform(0, 1, no_samples)
+        samples = GetInverse(weighting_function, np.random.uniform(0, 1, no_samples))
         values = F(samples)
         weights = GetWeightingFunction(weighting_function, samples)
-
         result = np.mean(values / weights)
         return result
 
@@ -27,8 +26,13 @@ def GetWeightingFunction(type, samples):
                 return 2 * samples
         elif type == "3":
                 return 4 * samples**3 
-        elif type == "4":
-               return 3 * samples**2
+def GetInverse(type, samples):
+        if type == "1":
+                return samples
+        elif type == "2":
+                return samples ** 0.5
+        elif type == "3":
+                return samples**0.25
 def F(x):
         return 3 * x**2
 
@@ -45,4 +49,4 @@ def Run(type, weighting_function, no_samples, no_runs):
         print(f"Mean integral = {mean}, standard deviation = {std}, MAE = {mae}")
         return
 
-Run("MC", "4", 1000, 100)
+Run("MC", "1", 1000, 100)
